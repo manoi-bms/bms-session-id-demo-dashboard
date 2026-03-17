@@ -12,7 +12,6 @@ import {
   retrieveBmsSession,
   extractConnectionConfig,
   extractUserInfo,
-  PASTE_JSON_URL,
   APP_IDENTIFIER,
 } from '@/services/bmsSession'
 import type { BmsSessionResponse } from '@/types'
