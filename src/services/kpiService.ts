@@ -510,3 +510,116 @@ export async function getTopDoctorsThisMonth(
     patientCount: Number(row['patient_count'] ?? 0),
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Trend Summary & Extended Trend KPIs
+// ---------------------------------------------------------------------------
+
+/**
+ * Trend summary statistics for a date range.
+ */
+export interface TrendSummary {
+  totalVisits: number
+  avgDailyVisits: number
+  peakDay: { date: string; count: number } | null
+  lowestDay: { date: string; count: number } | null
+  totalDays: number
+  daysWithVisits: number
+}
+
+export function computeTrendSummary(trends: VisitTrend[]): TrendSummary {
+  if (trends.length === 0) {
+    return { totalVisits: 0, avgDailyVisits: 0, peakDay: null, lowestDay: null, totalDays: 0, daysWithVisits: 0 }
+  }
+  const totalVisits = trends.reduce((sum, t) => sum + t.visitCount, 0)
+  const daysWithVisits = trends.filter(t => t.visitCount > 0).length
+  const sorted = [...trends].sort((a, b) => b.visitCount - a.visitCount)
+  return {
+    totalVisits,
+    avgDailyVisits: Math.round(totalVisits / trends.length),
+    peakDay: sorted[0] ? { date: sorted[0].date, count: sorted[0].visitCount } : null,
+    lowestDay: sorted[sorted.length - 1] ? { date: sorted[sorted.length - 1].date, count: sorted[sorted.length - 1].visitCount } : null,
+    totalDays: trends.length,
+    daysWithVisits,
+  }
+}
+
+/**
+ * Monthly visit summary for the last 6 months.
+ */
+export async function getMonthlyVisitSummary(
+  config: ConnectionConfig,
+  dbType: DatabaseType,
+): Promise<{ month: string; visitCount: number }[]> {
+  const monthExpr = queryBuilder.dateFormat(dbType, 'vstdate', '%Y-%m');
+  const sql =
+    `SELECT ${monthExpr} as visit_month, COUNT(*) as visit_count ` +
+    `FROM ovst ` +
+    `WHERE vstdate >= ${queryBuilder.dateSubtract(dbType, 180)} ` +
+    `GROUP BY ${monthExpr} ` +
+    `ORDER BY visit_month ASC`;
+  const response = await executeSqlViaApi(sql, config);
+  return parseQueryResponse(response, (row) => ({
+    month: String(row['visit_month'] ?? ''),
+    visitCount: Number(row['visit_count'] ?? 0),
+  }));
+}
+
+/**
+ * Visit counts by day of week for a date range.
+ */
+export async function getVisitsByDayOfWeek(
+  config: ConnectionConfig,
+  dbType: DatabaseType,
+  startDate: string,
+  endDate: string,
+): Promise<{ dayOfWeek: number; dayName: string; visitCount: number }[]> {
+  // Use day of week extraction - MySQL DAYOFWEEK (1=Sun..7=Sat), PostgreSQL EXTRACT(DOW) (0=Sun..6=Sat)
+  const dowExpr = dbType === 'mysql'
+    ? 'DAYOFWEEK(vstdate)'
+    : "EXTRACT(DOW FROM vstdate)::int";
+  const sql =
+    `SELECT ${dowExpr} as day_of_week, COUNT(*) as visit_count ` +
+    `FROM ovst ` +
+    `WHERE vstdate >= '${startDate}' AND vstdate <= '${endDate}' ` +
+    `GROUP BY ${dowExpr} ` +
+    `ORDER BY day_of_week ASC`;
+  const response = await executeSqlViaApi(sql, config);
+
+  const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
+  return parseQueryResponse(response, (row) => {
+    let dow = Number(row['day_of_week'] ?? 0);
+    // MySQL: 1=Sun..7=Sat -> normalize to 0=Sun..6=Sat
+    if (dbType === 'mysql') dow = dow - 1;
+    return {
+      dayOfWeek: dow,
+      dayName: dayNames[dow] ?? `วัน ${dow}`,
+      visitCount: Number(row['visit_count'] ?? 0),
+    };
+  });
+}
+
+/**
+ * Top 5 departments by visit count for a date range.
+ */
+export async function getTopDepartmentsForRange(
+  config: ConnectionConfig,
+  _dbType: DatabaseType,
+  startDate: string,
+  endDate: string,
+): Promise<DepartmentWorkload[]> {
+  const sql =
+    `SELECT k.depcode as department_code, k.department as department_name, COUNT(*) as visit_count ` +
+    `FROM ovst o LEFT JOIN kskdepartment k ON o.cur_dep = k.depcode ` +
+    `WHERE o.vstdate >= '${startDate}' AND o.vstdate <= '${endDate}' ` +
+    `GROUP BY k.depcode, k.department ` +
+    `ORDER BY visit_count DESC ` +
+    `LIMIT 5`;
+  const response = await executeSqlViaApi(sql, config);
+  return parseQueryResponse(response, (row) => ({
+    departmentCode: String(row['department_code'] ?? ''),
+    departmentName: String(row['department_name'] ?? ''),
+    visitCount: Number(row['visit_count'] ?? 0),
+  }));
+}
