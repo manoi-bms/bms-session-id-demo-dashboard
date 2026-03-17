@@ -61,14 +61,27 @@ npm run dev
 
 ## Session ID สำหรับทดสอบ
 
+BMS Session ID จะได้รับจากระบบ HOSxP Dashboard โดยอัตโนมัติ เมื่อผู้ใช้เปิดลิงก์จากเมนู Dashboard ในโปรแกรม HOSxP ระบบจะส่ง `bms-session-id` มาใน URL parameter
+
+### วิธีรับ Session ID
+
+1. เปิดโปรแกรม **HOSxP** บนเครื่องที่มี BMS API Server ทำงานอยู่
+2. ไปที่เมนู **Dashboard** ในระบบ HOSxP
+3. ระบบจะสร้าง URL พร้อม session ID ในรูปแบบ:
+   ```
+   https://your-dashboard.com/?bms-session-id=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+   ```
+4. Session ID จะถูกสร้างใหม่ทุกครั้งที่เปิดใช้งาน และมีอายุตามที่ BMS API Server กำหนด (ค่าเริ่มต้น 30 วัน)
+
+### การใช้งานกับ Demo Dashboard
+
+คัดลอก Session ID จาก URL ของ HOSxP Dashboard แล้วนำมาใช้กับ Demo Dashboard:
+
 ```
-02FA45D1-91EF-4D6E-B341-ED1436343807
+http://localhost:3080/?bms-session-id=YOUR_SESSION_ID_FROM_HOSXP
 ```
 
-ตัวอย่าง URL:
-```
-http://localhost:3080/?bms-session-id=02FA45D1-91EF-4D6E-B341-ED1436343807
-```
+> **หมายเหตุ**: Session ID เป็นค่าเฉพาะของแต่ละเครื่อง/ผู้ใช้ ไม่สามารถใช้ข้ามเครื่องได้ และจะหมดอายุเมื่อ BMS API Server รีสตาร์ท
 
 ## การเชื่อมต่อ BMS Session
 
